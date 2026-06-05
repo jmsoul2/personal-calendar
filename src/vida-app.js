@@ -22,6 +22,10 @@
   function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
   const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h < 12 ? 'a' : 'p'; const h12 = h % 12 || 12; return h12 + (m ? ':' + String(m).padStart(2, '0') : '') + ap; };
 
+  // Íconos (descarga / carga) para los botones de copia de seguridad
+  const ICON_EXPORT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+  const ICON_IMPORT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+
   let state = { view: localStorage.getItem(LSV) || 'year', cursor: P.today(), year: P.today().getFullYear() };
   function setView(v) { state.view = v; localStorage.setItem(LSV, v); render(); }
 
@@ -34,7 +38,11 @@
         <div class="text-[12px] font-bold tracking-[0.2em] uppercase text-slate leading-none whitespace-nowrap">Calendario · Vida</div>
         <h1 class="font-serif text-[34px] leading-none mt-1.5">${state.view === 'month' ? P.MONTHS[state.cursor.getMonth()] + ' ' + state.cursor.getFullYear() : state.year}</h1>
       </div>
-      <div class="flex items-center gap-1 bg-white rounded-lg p-1 border border-line shadow-sm">${tab('year', 'Año')}${tab('month', 'Mes')}</div>
+      <div class="flex items-center gap-2">
+        <button data-export aria-label="Exportar copia" title="Exportar copia de seguridad (.json)" class="w-9 h-9 grid place-items-center rounded-md bg-white border border-line text-gray2 hover:text-ink shadow-sm">${ICON_EXPORT}</button>
+        <button data-import aria-label="Importar copia" title="Importar copia de seguridad (.json)" class="w-9 h-9 grid place-items-center rounded-md bg-white border border-line text-gray2 hover:text-ink shadow-sm">${ICON_IMPORT}</button>
+        <div class="flex items-center gap-1 bg-white rounded-lg p-1 border border-line shadow-sm">${tab('year', 'Año')}${tab('month', 'Mes')}</div>
+      </div>
     </div>`;
   }
 
@@ -281,6 +289,70 @@
     drag = null;
   });
 
+  /* ---------------- copia de seguridad (export / import JSON) ---------------- */
+  function exportJSON() {
+    const payload = {
+      app: 'calendario-vida',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      events: P.getEvents(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calendario-vida-${P.fmt(P.today())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function importJSON(file) {
+    const reader = new FileReader();
+    reader.onerror = () => alert('No pude leer el archivo.');
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (e) { alert('Ese archivo no es un JSON válido.'); return; }
+      // Acepta tanto {events:[...]} (formato de export) como un array directo.
+      const raw = Array.isArray(parsed) ? parsed
+        : (parsed && Array.isArray(parsed.events) ? parsed.events : null);
+      if (!raw) { alert('El archivo no tiene eventos en el formato esperado.'); return; }
+      const events = raw
+        .filter(e => e && e.title && e.start && e.end)
+        .map(e => ({
+          id: e.id || P.uid(),
+          title: String(e.title),
+          start: e.start, end: e.end,
+          cat: CATS[e.cat] ? e.cat : 'viaje',
+          note: e.note || '', time: e.time || '',
+        }));
+      const current = P.getEvents().length;
+      const ok = confirm(
+        'Importar copia de seguridad\n\n' +
+        '• Eventos en el archivo: ' + events.length + '\n' +
+        '• Eventos actuales: ' + current + '\n\n' +
+        'Esto REEMPLAZA todos los eventos actuales (y se sincroniza a los demás dispositivos).\n\n¿Continuar?'
+      );
+      if (!ok) return;
+      P.saveEvents(events);   // dispara la sincronización (push al servidor)
+      render();
+      alert('Listo: ' + events.length + ' evento(s) importado(s).');
+    };
+    reader.readAsText(file);
+  }
+
+  // Input de archivo oculto (fuera de #app para que no lo borre el re-render).
+  const importInput = document.createElement('input');
+  importInput.type = 'file';
+  importInput.accept = 'application/json,.json';
+  importInput.style.display = 'none';
+  importInput.addEventListener('change', () => {
+    const f = importInput.files && importInput.files[0];
+    if (f) importJSON(f);
+    importInput.value = '';   // permite reimportar el mismo archivo
+  });
+  document.body.appendChild(importInput);
+
   /* ---------------- render + click events ---------------- */
   function render() {
     app.innerHTML = header() + (state.view === 'year' ? renderYear() : renderMonth());
@@ -298,6 +370,8 @@
       const addEl = e.target.closest('[data-add]'); if (addEl) return openNew(addEl.dataset.add);
     }
     const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+    if (d.export != null) return exportJSON();
+    if (d.import != null) return importInput.click();
     if (d.tab) return setView(d.tab);
     if (d.y) { state.year += +d.y; return render(); }
     if (d.month != null) { state.cursor = new Date(state.year, +d.month, 1); return setView('month'); }

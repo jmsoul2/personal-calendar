@@ -87,8 +87,22 @@ Diseñado en Claude Design (claude.ai/design) y exportado como handoff bundle.
 Se descartaron 3 bocetos alternativos (Slate, Editorial, Focus) a favor de
 este "Calendario Vida". El stack se mantiene vanilla a propósito.
 
+## Despliegue (en producción)
+- **URL en vivo**: https://juanysusypcalendar.netlify.app/
+- Repo: https://github.com/jmsoul2/personal-calendar (privado) → Netlify auto-deploy en cada push a `main`.
+- `CAL_KEY` configurada en Netlify. Cambiarla requiere **redeploy** + re-ingresar la clave
+  nueva en cada dispositivo (tocar la pastilla de estado).
+
+## Copia de seguridad (export / import JSON)
+Botones ⤓/⤒ en el header (ambas vistas), en `vida-app.js` → `exportJSON()` / `importJSON()`.
+- **Exportar**: descarga `calendario-vida-YYYY-MM-DD.json` con `{app,version,exportedAt,events}`.
+- **Importar**: lee un `.json` (acepta el wrapper o un array suelto), pide confirmación y
+  **reemplaza** todos los eventos (luego sincroniza al servidor). El PC es la fuente principal.
+
 ## Objetivos Actuales
 - [x] Sincronización entre dispositivos (Netlify Functions + Blobs, clave compartida).
-- [ ] Desplegar a Netlify (GitHub + auto-deploy) y configurar `CAL_KEY`. Ver `DEPLOY.md`.
+- [x] Desplegar a Netlify (GitHub + auto-deploy) con `CAL_KEY`. Ver `DEPLOY.md`.
+- [x] Copia de seguridad local (export/import JSON).
+- [ ] Compartir el link + clave con Susana (Safari › Añadir a inicio).
 - [ ] (Opcional) Offline real con service worker — pospuesto a propósito.
 - [ ] (Opcional) Susana solo-lectura (clave aparte) si alguna vez se quiere separar roles.
