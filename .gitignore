@@ -1,0 +1,27 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Directorio active (mayormente efímero)
+active/temp/
+active/memory/
+
+# Node/JS (web app)
+node_modules/
+dist/
+build/
+.next/
+
+# Netlify (build local / netlify dev)
+.netlify/
+
+# OS y editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+*~
+
+# Claude Code (config local de la máquina, no se comparte)
+.claude/settings.local.json

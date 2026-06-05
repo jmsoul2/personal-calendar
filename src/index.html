@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Calendario · Vida</title>
+<meta name="description" content="Calendario personal con eventos multi-día en color." />
+<meta name="theme-color" content="#0E2841" />
+<!-- Instalable como app a pantalla completa en iPhone (Compartir › Añadir a inicio) -->
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Calendario" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: '#0E2841', slate: '#4E82A8', slate2: '#739EBE',
+          mist: '#D2D9DF', mist2: '#EAEFF3', line: '#D7DEE4', gray2: '#64707C',
+        },
+        fontFamily: { serif: ['Newsreader', 'Georgia', 'serif'], sans: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'] },
+      },
+    },
+  };
+</script>
+<script src="core.js"></script>
+<style>
+  html, body { background: #F1F4F6; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #C6D0D9; border-radius: 9px; }
+  .inp { background: #fff; outline: none; width: 100%; border: 1px solid #D7DEE4; border-radius: 9px; padding: 9px 11px; font-size: 14px; color: #0E2841; }
+  .inp:focus { border-color: #4E82A8; box-shadow: 0 0 0 3px rgba(78,130,168,.14); }
+  .lbl { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #64707C; margin-bottom: 6px; display: block; }
+  .ev-bar { font-variant-numeric: tabular-nums; }
+  [data-resize] { cursor: ew-resize; }
+  .dragging, .dragging [data-edit] { cursor: grabbing !important; }
+  [data-modal] { transition: opacity .15s; }
+
+  /* ---------- Responsive / iPhone ---------- */
+  /* Safe areas (notch y barra de inicio) cuando corre como app instalada */
+  #app { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); padding-top: max(28px, env(safe-area-inset-top)); padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  /* Vista Año: una columna en móvil, panel + meses en escritorio */
+  .yr-grid { grid-template-columns: 1fr; }
+  .yr-months { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); }
+  @media (min-width: 1024px) {
+    .yr-grid { grid-template-columns: 320px 1fr; }
+    .yr-months { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+    .yr-aside { max-height: calc(100vh - 130px); position: sticky; top: 24px; }
+  }
+  /* Vista Mes: celdas más bajas en móvil para que quepa la semana */
+  .mo-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(74px, auto); }
+  @media (min-width: 640px) { .mo-week { grid-auto-rows: minmax(106px, auto); } }
+  /* En pantallas táctiles, los tiradores de borde no roban el scroll */
+  @media (hover: none) { [data-resize] { touch-action: none; } }
+</style>
+</head>
+<body class="font-sans text-ink">
+  <div class="max-w-[1280px] mx-auto px-5 py-7" id="app"></div>
+
+  <!-- Event modal -->
+  <div data-modal class="fixed inset-0 z-50 hidden items-center justify-center p-4" id="modal">
+    <div class="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" data-close></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[460px] overflow-hidden">
+      <div class="px-6 pt-5 pb-4 border-b border-line flex items-center justify-between">
+        <h3 class="font-serif text-[22px]" id="m-title">Nuevo evento</h3>
+        <button data-close class="w-8 h-8 grid place-items-center rounded-lg text-gray2 hover:bg-mist2 text-[18px]">×</button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="lbl">Título</label>
+          <input id="f-title" class="inp" placeholder="Viaje a la costa, cumpleaños, cita…" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Inicio</label><input id="f-start" type="date" class="inp" /></div>
+          <div><label class="lbl">Fin</label><input id="f-end" type="date" class="inp" /></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 items-end">
+          <div><label class="lbl">Hora <span class="font-normal lowercase tracking-normal text-gray2/70">(opcional)</span></label><input id="f-time" type="time" class="inp" /></div>
+          <div class="text-[12px] text-gray2/80 pb-2.5 leading-snug">Se muestra en la vista Mes</div>
+        </div>
+        <div>
+          <label class="lbl">Categoría</label>
+          <div id="f-cats" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div>
+          <label class="lbl">Nota <span class="font-normal lowercase tracking-normal text-gray2/70">(opcional)</span></label>
+          <textarea id="f-note" class="inp resize-none h-[64px]" placeholder="Detalles, lugar, con quién…"></textarea>
+        </div>
+      </div>
+      <div class="px-6 py-4 bg-mist2/50 border-t border-line flex items-center justify-between gap-3">
+        <button id="f-delete" class="text-[13px] font-semibold text-[#C0524A] hover:underline hidden">Eliminar</button>
+        <div class="flex items-center gap-2 ml-auto">
+          <button data-close class="px-4 h-9 rounded-lg text-[14px] font-semibold text-gray2 hover:bg-mist2">Cancelar</button>
+          <button id="f-save" class="px-5 h-9 rounded-lg text-[14px] font-bold bg-ink text-white hover:bg-ink/90">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="vida-app.js"></script>
+<script src="sync.js"></script>
+</body>
+</html>

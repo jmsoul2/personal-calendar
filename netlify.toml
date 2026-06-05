@@ -1,0 +1,6 @@
+# Configuración de Netlify para el Calendario Vida
+# - El sitio estático vive en src/
+# - La función serverless (/api/events) vive en netlify/functions/
+[build]
+  publish = "src"
+  functions = "netlify/functions"
