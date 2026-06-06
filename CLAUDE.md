@@ -32,15 +32,17 @@ La app es responsive y se puede instalar a pantalla completa en iPhone.
 ## Estructura de Carpetas
 - `src/` — Código de la app (esto es lo que Netlify publica, ver `netlify.toml`)
   - `index.html` — Punto de entrada (era "Calendario Vida.html"). Markup + modal + CSS responsive.
-  - `core.js` — Capa de datos (`window.Planner`): localStorage, eventos, utilidades de fecha.
-    `saveEvents()` emite el evento `planner:events-changed` (lo escucha `sync.js`).
-  - `vida-app.js` — Toda la UI: render de Año/Mes, modal, drag & drop, eventos de click.
-    Redibuja al recibir `planner:remote-applied` (datos frescos del servidor).
-  - `sync.js` — Capa de sincronización: baja/sube eventos a `/api/events`, clave
-    compartida, indicador de estado (pastilla abajo-izquierda). Ver sección Sync.
+  - `core.js` — Capa de datos (`window.Planner`): localStorage, eventos, **categorías**,
+    utilidades de fecha. `saveEvents()` emite `planner:events-changed` y `saveCats()`
+    emite `planner:cats-changed` (ambos los escucha `sync.js`).
+  - `vida-app.js` — Toda la UI: render de Año/Mes, modal de evento, **modal de categorías**,
+    drag & drop, eventos de click. Redibuja al recibir `planner:remote-applied`.
+  - `sync.js` — Capa de sincronización: baja/sube **eventos + categorías** a `/api/events`,
+    clave compartida, indicador de estado (pastilla abajo-izquierda). Ver sección Sync.
   - `manifest.webmanifest` — Metadatos PWA para instalar a pantalla completa.
   - `icon-180/192/512.png` — Íconos de app (apple-touch-icon + manifest).
 - `netlify/functions/events.mjs` — Función serverless `/api/events` (GET/PUT) sobre Netlify Blobs.
+  Guarda `events` y `cats` en claves separadas del store `vida`. GET → `{events, cats}`.
 - `netlify.toml` — Config de Netlify (publish=`src`, functions=`netlify/functions`).
 - `package.json` — Solo dependencia de la función: `@netlify/blobs`.
 - `active/memory/` — Memoria de trabajo y contexto entre sesiones
@@ -51,11 +53,12 @@ La app es responsive y se puede instalar a pantalla completa en iPhone.
 Decisión tomada (2026-06-05): los eventos se sincronizan entre dispositivos para
 que Susana pueda VER y ambos puedan ANOTAR al vuelo.
 - **Backend**: `netlify/functions/events.mjs` expone `/api/events`.
-  - `GET` → devuelve el array de eventos. `PUT` → reemplaza el array completo.
+  - `GET` → `{events, cats}`. `PUT` → reemplaza `events` (y `cats` si vienen).
+    Compat: acepta también un array suelto = solo eventos.
   - Protegido por **clave compartida** en la env var `CAL_KEY` (Netlify), que el
     cliente envía en el header `x-cal-key`. Misma clave para Juan y Susana; ambos
     pueden leer y escribir.
-  - Datos en Netlify Blobs (store `vida`, clave `events`). No hay base de datos.
+  - Datos en Netlify Blobs (store `vida`, claves `events` y `cats`). No hay base de datos.
 - **Frontend** (`sync.js`): localStorage = caché (la app sigue instantánea).
   Al abrir baja del servidor; al guardar sube con debounce (~1.2s). Reconcilia al
   volver online / volver a la pestaña. La clave se guarda en `localStorage`
@@ -70,8 +73,11 @@ que Susana pueda VER y ambos puedan ANOTAR al vuelo.
   en Netlify Blobs y `sync.js` la mantiene al día.
 - `planner:vida:view` — última vista usada (`year` | `month`).
 - `planner:vida:synckey` — clave compartida guardada en este dispositivo.
-- Categorías (con color) definidas en `vida-app.js` → `CATS`:
-  viaje, familia, salud, social, personal, importante.
+- `planner:vida:cats` — array de categorías editables `[{key,name,color}]`.
+  Semilla = `DEFAULT_CATS` en `core.js` (viaje, familia, salud, social, personal,
+  importante). **Los eventos guardan la `key`, no el nombre ni el índice** → renombrar
+  o recolorar no toca ningún evento. Se sincroniza igual que los eventos. Ver sección
+  "Categorías editables".
 - (`core.js` también incluye una capa `days`/`prep` de los bocetos semanales
   originales, no usada por el Calendario Vida.)
 
@@ -93,16 +99,32 @@ este "Calendario Vida". El stack se mantiene vanilla a propósito.
 - `CAL_KEY` configurada en Netlify. Cambiarla requiere **redeploy** + re-ingresar la clave
   nueva en cada dispositivo (tocar la pastilla de estado).
 
+## Categorías editables (nombre + color, añadir/quitar)
+Botón **"Editar"** (✎) en la leyenda de categorías (ambas vistas) → abre `#cats-modal`.
+En `vida-app.js`: estado en `CAT_LIST` (fuente de verdad), índices derivados `CATS`/`CAT_KEYS`
+(reconstruidos por `indexCats()`); `persistCats()` = `P.saveCats(CAT_LIST)` + reindexar.
+- **Renombrar**: en vivo en cada tecla (persiste, sin re-render para no perder el foco).
+- **Color**: paleta curada `PALETTE` (~12 tonos), no picker nativo. Una paleta inline abierta a la vez.
+- **Añadir**: key nueva `'c'+uid()`, nombre "Nueva", primer color libre; auto-focus.
+- **Eliminar**: bloquea si queda una sola; si está en uso, confirma (esos eventos quedan en gris).
+- **Borrado seguro (lazy)**: al borrar, los eventos conservan su `cat` huérfana; `catColor()`
+  cae a `FALLBACK_CAT` (gris `#9AA6B1`). No se reasignan eventos → retrocompatible.
+- **Se sincroniza** entre dispositivos junto con los eventos (ver Sync). Susana ve los mismos
+  nombres/colores. Por eso **nunca se usa el nombre o el índice como id, siempre la `key`**.
+- Modal **fuera de `#app`** con sus propios listeners (no cuelga del handler global).
+
 ## Copia de seguridad (export / import JSON)
 Botones ⤓/⤒ en el header (ambas vistas), en `vida-app.js` → `exportJSON()` / `importJSON()`.
-- **Exportar**: descarga `calendario-vida-YYYY-MM-DD.json` con `{app,version,exportedAt,events}`.
-- **Importar**: lee un `.json` (acepta el wrapper o un array suelto), pide confirmación y
-  **reemplaza** todos los eventos (luego sincroniza al servidor). El PC es la fuente principal.
+- **Exportar**: descarga `calendario-vida-YYYY-MM-DD.json` con `{app,version:2,exportedAt,events,cats}`.
+- **Importar**: lee un `.json` (acepta el wrapper o un array suelto de eventos), pide confirmación y
+  **reemplaza** eventos (y categorías si el archivo las trae; aplica `cats` antes de validar las
+  keys de los eventos). Luego sincroniza al servidor. El PC es la fuente principal.
 
 ## Objetivos Actuales
 - [x] Sincronización entre dispositivos (Netlify Functions + Blobs, clave compartida).
 - [x] Desplegar a Netlify (GitHub + auto-deploy) con `CAL_KEY`. Ver `DEPLOY.md`.
 - [x] Copia de seguridad local (export/import JSON).
+- [x] Categorías editables (renombrar, recolorar, añadir, quitar) sincronizadas.
 - [ ] Compartir el link + clave con Susana (Safari › Añadir a inicio).
 - [ ] (Opcional) Offline real con service worker — pospuesto a propósito.
 - [ ] (Opcional) Susana solo-lectura (clave aparte) si alguna vez se quiere separar roles.

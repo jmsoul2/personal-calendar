@@ -1,11 +1,12 @@
 /* ============================================================
    Netlify Function: /api/events
-   Fuente compartida de eventos del Calendario Vida.
-   - Datos en Netlify Blobs (store "vida", clave "events").
+   Fuente compartida del Calendario Vida.
+   - Datos en Netlify Blobs (store "vida", claves "events" y "cats").
    - Protegido por clave compartida (env var CAL_KEY) que el
      cliente envía en el header  x-cal-key.
-   GET  -> devuelve el array de eventos
-   PUT  -> reemplaza el array completo (last-write-wins)
+   GET  -> { events:[...], cats:[...]|null }
+   PUT  -> reemplaza events (y cats si vienen). last-write-wins.
+   Compat: acepta también un array suelto = solo eventos.
    ============================================================ */
 import { getStore } from '@netlify/blobs';
 
@@ -25,16 +26,28 @@ export default async (req) => {
   const store = getStore('vida');
 
   if (req.method === 'GET') {
-    const data = await store.get('events', { type: 'json' });
-    return json(Array.isArray(data) ? data : []);
+    const events = await store.get('events', { type: 'json' });
+    const cats = await store.get('cats', { type: 'json' });
+    return json({
+      events: Array.isArray(events) ? events : [],
+      cats: Array.isArray(cats) ? cats : null,
+    });
   }
 
   if (req.method === 'PUT' || req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
-    if (!Array.isArray(body)) return json({ error: 'se esperaba un array' }, 400);
-    await store.setJSON('events', body);
-    return json({ ok: true, count: body.length });
+    // Acepta { events, cats } (nuevo) o un array suelto = solo eventos (compat).
+    let events, cats;
+    if (Array.isArray(body)) { events = body; cats = undefined; }
+    else if (body && typeof body === 'object') {
+      events = Array.isArray(body.events) ? body.events : null;
+      cats = Array.isArray(body.cats) ? body.cats : undefined;
+    }
+    if (!Array.isArray(events)) return json({ error: 'se esperaba events[]' }, 400);
+    await store.setJSON('events', events);
+    if (cats !== undefined) await store.setJSON('cats', cats);
+    return json({ ok: true, count: events.length, cats: cats ? cats.length : undefined });
   }
 
   return json({ error: 'method not allowed' }, 405);

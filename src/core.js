@@ -101,6 +101,30 @@ window.Planner = (function () {
     localStorage.setItem(KEY_EVENTS, JSON.stringify(a));
     if (!silent) { try { window.dispatchEvent(new CustomEvent('planner:events-changed')); } catch (e) {} }
   }
+
+  /* ---- categorías editables (Vida calendar) ---- */
+  // [{key,name,color}]. Los eventos guardan la KEY (no el nombre ni el índice),
+  // así renombrar/recolorar no toca ningún evento. Sincronizadas junto a los eventos.
+  const KEY_CATS = 'planner:vida:cats';
+  const DEFAULT_CATS = [
+    { key: 'viaje',      name: 'Viaje',      color: '#4E82A8' },
+    { key: 'familia',    name: 'Familia',    color: '#C2724E' },
+    { key: 'salud',      name: 'Salud',      color: '#4F9E76' },
+    { key: 'social',     name: 'Social',     color: '#C39A52' },
+    { key: 'personal',   name: 'Personal',   color: '#9C6597' },
+    { key: 'importante', name: 'Importante', color: '#C75E55' },
+  ];
+  function getCats() {
+    try {
+      const a = JSON.parse(localStorage.getItem(KEY_CATS));
+      if (Array.isArray(a) && a.length) return a;
+    } catch (e) {}
+    return DEFAULT_CATS.map(c => ({ ...c }));   // semilla (copia)
+  }
+  function saveCats(a, silent) {
+    localStorage.setItem(KEY_CATS, JSON.stringify(a));
+    if (!silent) { try { window.dispatchEvent(new CustomEvent('planner:cats-changed')); } catch (e) {} }
+  }
   function normEvent(e) { if (e.end < e.start) { const t = e.end; e.end = e.start; e.start = t; } return e; }
   function addEvent(ev) { const a = getEvents(); ev.id = ev.id || uid(); normEvent(ev); a.push(ev); saveEvents(a); return ev; }
   function updateEvent(id, patch) { const a = getEvents(); const e = a.find(x => x.id === id); if (e) { Object.assign(e, patch); normEvent(e); saveEvents(a); } }
@@ -138,6 +162,7 @@ window.Planner = (function () {
     getDays, getDay, setDay, addDayItem, dayToggle, dayEdit, dayRemove, dayCount,
     getPrep, setPrep, setPrepField, prepAdd, prepToggle, prepEdit, prepRemove,
     getEvents, saveEvents, addEvent, updateEvent, removeEvent, getEvent,
+    getCats, saveCats, DEFAULT_CATS,
     eventsCovering, spanDays, eventRangeLabel, layoutWeek,
     MONTHS, MONTHS_ABBR, DOW, DOW_ABBR, DOW_LETTER,
     fmt, parse, addDays, startOfDay, weekStart, weekDays, sameDay, today, isToday,

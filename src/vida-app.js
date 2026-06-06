@@ -8,16 +8,26 @@
   const app = document.getElementById('app');
   const LSV = 'planner:vida:view';
 
-  const CATS = {
-    viaje:      { name: 'Viaje',      color: '#4E82A8' },
-    familia:    { name: 'Familia',    color: '#C2724E' },
-    salud:      { name: 'Salud',      color: '#4F9E76' },
-    social:     { name: 'Social',     color: '#C39A52' },
-    personal:   { name: 'Personal',   color: '#9C6597' },
-    importante: { name: 'Importante', color: '#C75E55' },
-  };
-  const CAT_KEYS = Object.keys(CATS);
-  const catColor = k => (CATS[k] || CATS.viaje).color;
+  // Categorías editables. CAT_LIST = fuente de verdad ([{key,name,color}]).
+  // CATS / CAT_KEYS = índices derivados (cache de solo lectura) — siempre se
+  // mutan vía CAT_LIST + persistCats(), nunca a mano. La KEY es estable: los
+  // eventos la referencian, así renombrar/recolorar no toca ningún evento.
+  const FALLBACK_CAT = { name: 'Sin categoría', color: '#9AA6B1' };
+  // Paleta curada (no picker nativo) para no romper la identidad visual.
+  const PALETTE = [
+    '#4E82A8', '#2E5E7E', '#5C8A8A', '#4F9E76', '#6FA84E', '#C39A52',
+    '#C2724E', '#A85636', '#C75E55', '#B0496B', '#9C6597', '#6E6FB0',
+  ];
+  let CAT_LIST = P.getCats();
+  let CATS = {}, CAT_KEYS = [];
+  function indexCats() {
+    CATS = {}; CAT_KEYS = [];
+    CAT_LIST.forEach(c => { CATS[c.key] = { name: c.name, color: c.color }; CAT_KEYS.push(c.key); });
+  }
+  indexCats();
+  function persistCats() { P.saveCats(CAT_LIST); indexCats(); }
+  const catColor = k => (CATS[k] || FALLBACK_CAT).color;
+  const catName = k => (CATS[k] ? CATS[k].name : '');
   const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
   const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h < 12 ? 'a' : 'p'; const h12 = h % 12 || 12; return h12 + (m ? ':' + String(m).padStart(2, '0') : '') + ap; };
@@ -48,7 +58,7 @@
 
   function legend() {
     return `<div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">${CAT_KEYS.map(k =>
-      `<span class="inline-flex items-center gap-1.5 text-[12px] text-gray2"><span class="w-2.5 h-2.5 rounded-full" style="background:${catColor(k)}"></span>${CATS[k].name}</span>`).join('')}</div>`;
+      `<span class="inline-flex items-center gap-1.5 text-[12px] text-gray2"><span class="w-2.5 h-2.5 rounded-full" style="background:${catColor(k)}"></span>${esc(CATS[k].name)}</span>`).join('')}<button data-cats-edit class="inline-flex items-center gap-1 text-[12px] font-semibold text-slate hover:text-ink"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editar</button></div>`;
   }
 
   /* ---------------- YEAR: sidebar + mini-months (días rellenos) ---------------- */
@@ -105,7 +115,7 @@
             <span class="block text-[14px] font-semibold text-ink truncate group-hover:text-slate">${esc(ev.title)}</span>
             <span class="block text-[12px] text-gray2 mt-0.5">${ev.time ? fmtTime(ev.time) + ' · ' : ''}${P.eventRangeLabel(ev)}</span>
           </span>
-          <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full self-start flex-none" style="color:${c};background:${hexA(c, .12)}">${CATS[ev.cat] ? CATS[ev.cat].name : ''}</span>
+          <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full self-start flex-none" style="color:${c};background:${hexA(c, .12)}">${esc(catName(ev.cat))}</span>
         </button>`;
       });
     }
@@ -191,18 +201,18 @@
 
   /* ---------------- modal ---------------- */
   const modal = document.getElementById('modal');
-  let editingId = null, selCat = 'viaje';
+  let editingId = null, selCat = CAT_KEYS[0];
   function renderCatPicker() {
     document.getElementById('f-cats').innerHTML = CAT_KEYS.map(k => {
       const sel = k === selCat, c = catColor(k);
       return `<button type="button" data-cat="${k}" class="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-[13px] font-medium transition ${sel ? 'text-white' : 'text-gray2 bg-white border-line hover:border-slate'}" style="${sel ? `background:${c};border-color:${c}` : ''}">
-        <span class="w-2.5 h-2.5 rounded-full" style="background:${sel ? '#fff' : c}"></span>${CATS[k].name}</button>`;
+        <span class="w-2.5 h-2.5 rounded-full" style="background:${sel ? '#fff' : c}"></span>${esc(CATS[k].name)}</button>`;
     }).join('');
   }
   function openModal() { modal.classList.remove('hidden'); modal.classList.add('flex'); }
   function closeModal() { modal.classList.add('hidden'); modal.classList.remove('flex'); }
   function openNew(dateStr) {
-    editingId = null; selCat = 'viaje';
+    editingId = null; selCat = CAT_KEYS[0];
     document.getElementById('m-title').textContent = 'Nuevo evento';
     document.getElementById('f-title').value = '';
     document.getElementById('f-note').value = '';
@@ -216,7 +226,7 @@
   }
   function openEdit(id) {
     const ev = P.getEvent(id); if (!ev) return;
-    editingId = id; selCat = ev.cat || 'viaje';
+    editingId = id; selCat = (ev.cat && CATS[ev.cat]) ? ev.cat : CAT_KEYS[0];
     document.getElementById('m-title').textContent = 'Editar evento';
     document.getElementById('f-title').value = ev.title;
     document.getElementById('f-note').value = ev.note || '';
@@ -244,7 +254,87 @@
     const cat = e.target.closest('[data-cat]'); if (cat) { selCat = cat.dataset.cat; renderCatPicker(); }
   });
   document.getElementById('f-title').addEventListener('keydown', e => { if (e.key === 'Enter') saveModal(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!modal.classList.contains('hidden')) closeModal();
+    else if (!catsModal.classList.contains('hidden')) closeCatsModal();
+  });
+
+  /* ---------------- modal de categorías (editar nombre/color, añadir/quitar) ---------------- */
+  const catsModal = document.getElementById('cats-modal');
+  let catPaletteOpen = null;   // key de la categoría con su paleta inline abierta (o null)
+
+  function renderCatsList() {
+    document.getElementById('cats-list').innerHTML = CAT_LIST.map(c => {
+      const palette = catPaletteOpen === c.key
+        ? `<div class="flex flex-wrap gap-1.5 mt-2 mb-1 pl-[38px]">${PALETTE.map(hex =>
+            `<button type="button" data-cat-color="${c.key}" data-color="${hex}" class="w-6 h-6 rounded-full transition ${hex.toLowerCase() === c.color.toLowerCase() ? 'ring-2 ring-offset-2 ring-ink' : 'hover:scale-110'}" style="background:${hex}"></button>`).join('')}</div>`
+        : '';
+      return `<div class="py-1">
+        <div class="flex items-center gap-2.5">
+          <button type="button" data-cat-swatch="${c.key}" class="w-7 h-7 rounded-full flex-none border border-black/10 shadow-sm" style="background:${c.color}" aria-label="Cambiar color"></button>
+          <input data-cat-name="${c.key}" value="${esc(c.name)}" maxlength="24" class="inp flex-1" placeholder="Nombre" />
+          <button type="button" data-cat-del="${c.key}" class="w-8 h-8 grid place-items-center rounded-lg text-gray2 hover:bg-mist2 hover:text-[#C0524A] text-[18px] flex-none" aria-label="Eliminar">×</button>
+        </div>
+        ${palette}
+      </div>`;
+    }).join('');
+  }
+  function openCatsModal() {
+    CAT_LIST = P.getCats(); indexCats();   // estado fresco
+    catPaletteOpen = null;
+    renderCatsList();
+    catsModal.classList.remove('hidden'); catsModal.classList.add('flex');
+  }
+  function closeCatsModal() {
+    catsModal.classList.add('hidden'); catsModal.classList.remove('flex');
+    render();   // re-render completo: todas las vistas toman nombres/colores nuevos
+  }
+  function addCat() {
+    const used = new Set(CAT_LIST.map(c => c.color.toLowerCase()));
+    const color = PALETTE.find(c => !used.has(c.toLowerCase())) || PALETTE[0];
+    const key = 'c' + P.uid();
+    CAT_LIST.push({ key, name: 'Nueva', color });
+    catPaletteOpen = null;
+    persistCats(); renderCatsList();
+    const inp = document.querySelector(`[data-cat-name="${key}"]`);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+  function deleteCat(key) {
+    if (CAT_LIST.length <= 1) { alert('Debes dejar al menos una categoría.'); return; }
+    const inUse = P.getEvents().filter(e => e.cat === key).length;
+    if (inUse > 0) {
+      const ok = confirm(
+        'Esta categoría la usan ' + inUse + ' evento(s).\n\n' +
+        'Si la eliminas, esos eventos quedarán sin color de categoría (gris).\n\n¿Eliminar de todas formas?'
+      );
+      if (!ok) return;
+    }
+    CAT_LIST = CAT_LIST.filter(c => c.key !== key);
+    if (catPaletteOpen === key) catPaletteOpen = null;
+    persistCats(); renderCatsList();
+  }
+  // Listeners propios del modal (no cuelgan del handler global de #app).
+  catsModal.addEventListener('click', e => {
+    if (e.target.closest('[data-cats-close]')) return closeCatsModal();
+    if (e.target.closest('#cats-add')) return addCat();
+    const sw = e.target.closest('[data-cat-swatch]');
+    if (sw) { const k = sw.dataset.catSwatch; catPaletteOpen = catPaletteOpen === k ? null : k; return renderCatsList(); }
+    const col = e.target.closest('[data-cat-color]');
+    if (col) {
+      const c = CAT_LIST.find(x => x.key === col.dataset.catColor);
+      if (c) c.color = col.dataset.color;
+      catPaletteOpen = null; persistCats(); renderCatsList(); return;
+    }
+    const del = e.target.closest('[data-cat-del]');
+    if (del) return deleteCat(del.dataset.catDel);
+  });
+  // Renombrar en vivo: persiste en cada tecla, pero NO re-renderiza (perdería el foco).
+  catsModal.addEventListener('input', e => {
+    const nm = e.target.closest('[data-cat-name]'); if (!nm) return;
+    const c = CAT_LIST.find(x => x.key === nm.dataset.catName);
+    if (c) { c.name = nm.value; persistCats(); }
+  });
 
   /* ---------------- drag (mover + estirar) en la vista Mes ---------------- */
   let drag = null, suppressClick = false;
@@ -293,9 +383,10 @@
   function exportJSON() {
     const payload = {
       app: 'calendario-vida',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       events: P.getEvents(),
+      cats: P.getCats(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -313,30 +404,41 @@
       let parsed;
       try { parsed = JSON.parse(reader.result); }
       catch (e) { alert('Ese archivo no es un JSON válido.'); return; }
-      // Acepta tanto {events:[...]} (formato de export) como un array directo.
+      // Acepta tanto {events:[...], cats:[...]} (export) como un array suelto de eventos.
       const raw = Array.isArray(parsed) ? parsed
         : (parsed && Array.isArray(parsed.events) ? parsed.events : null);
       if (!raw) { alert('El archivo no tiene eventos en el formato esperado.'); return; }
-      const events = raw
-        .filter(e => e && e.title && e.start && e.end)
-        .map(e => ({
-          id: e.id || P.uid(),
-          title: String(e.title),
-          start: e.start, end: e.end,
-          cat: CATS[e.cat] ? e.cat : 'viaje',
-          note: e.note || '', time: e.time || '',
-        }));
+      // Categorías opcionales (export v2). Si no vienen, se conservan las actuales.
+      let cats = null;
+      if (parsed && Array.isArray(parsed.cats)) {
+        cats = parsed.cats
+          .filter(c => c && c.key && c.name && c.color)
+          .map(c => ({ key: String(c.key), name: String(c.name), color: String(c.color) }));
+        if (!cats.length) cats = null;
+      }
+      const rawEvents = raw.filter(e => e && e.title && e.start && e.end);
       const current = P.getEvents().length;
       const ok = confirm(
         'Importar copia de seguridad\n\n' +
-        '• Eventos en el archivo: ' + events.length + '\n' +
-        '• Eventos actuales: ' + current + '\n\n' +
-        'Esto REEMPLAZA todos los eventos actuales (y se sincroniza a los demás dispositivos).\n\n¿Continuar?'
+        '• Eventos en el archivo: ' + rawEvents.length + '\n' +
+        '• Eventos actuales: ' + current + '\n' +
+        (cats ? '• Categorías en el archivo: ' + cats.length + '\n' : '') +
+        '\nEsto REEMPLAZA todos los eventos' + (cats ? ' y las categorías' : '') +
+        ' actuales (y se sincroniza a los demás dispositivos).\n\n¿Continuar?'
       );
       if (!ok) return;
+      // Aplica las categorías primero: así las keys de los eventos se validan contra ellas.
+      if (cats) { P.saveCats(cats); CAT_LIST = P.getCats(); indexCats(); }
+      const events = rawEvents.map(e => ({
+        id: e.id || P.uid(),
+        title: String(e.title),
+        start: e.start, end: e.end,
+        cat: CATS[e.cat] ? e.cat : CAT_KEYS[0],
+        note: e.note || '', time: e.time || '',
+      }));
       P.saveEvents(events);   // dispara la sincronización (push al servidor)
       render();
-      alert('Listo: ' + events.length + ' evento(s) importado(s).');
+      alert('Listo: ' + events.length + ' evento(s) importado(s)' + (cats ? ' y ' + cats.length + ' categoría(s)' : '') + '.');
     };
     reader.readAsText(file);
   }
@@ -370,6 +472,7 @@
       const addEl = e.target.closest('[data-add]'); if (addEl) return openNew(addEl.dataset.add);
     }
     const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+    if (d.catsEdit != null) return openCatsModal();
     if (d.export != null) return exportJSON();
     if (d.import != null) return importInput.click();
     if (d.tab) return setView(d.tab);
@@ -383,8 +486,8 @@
     if (d.today != null) { state.cursor = P.today(); state.year = state.cursor.getFullYear(); return render(); }
   });
 
-  // Cuando la capa de sync trae eventos nuevos del servidor, redibuja.
-  window.addEventListener('planner:remote-applied', render);
+  // Cuando la capa de sync trae datos nuevos del servidor, recarga categorías y redibuja.
+  window.addEventListener('planner:remote-applied', () => { CAT_LIST = P.getCats(); indexCats(); render(); });
 
   render();
 })();

@@ -75,6 +75,8 @@
   /* ---------------- red ---------------- */
   let lastError = false;
   const headers = () => ({ 'x-cal-key': getKey(), 'content-type': 'application/json' });
+  // Lo que viaja al servidor: eventos + categorías editables.
+  const snapshot = () => JSON.stringify({ events: P.getEvents(), cats: P.getCats() });
 
   async function pull() {
     if (!getKey()) { setStatus('nokey'); return; }
@@ -84,15 +86,22 @@
       if (r.status === 401) { lastError = true; setStatus('error'); return; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const data = await r.json();
-      if (!Array.isArray(data)) throw new Error('respuesta inesperada');
+      let events, cats;
+      if (Array.isArray(data)) { events = data; cats = null; }           // formato viejo (solo eventos)
+      else if (data && typeof data === 'object') {
+        events = Array.isArray(data.events) ? data.events : [];
+        cats = Array.isArray(data.cats) ? data.cats : null;             // null = el servidor aún no tiene categorías
+      } else throw new Error('respuesta inesperada');
+
       const localCount = P.getEvents().length;
-      if (data.length === 0 && localCount > 0) {
-        // Servidor vacío pero hay eventos locales (primer uso) -> sembrar el servidor.
+      if (events.length === 0 && cats == null && localCount > 0) {
+        // Servidor vacío pero hay datos locales (primer uso) -> sembrar el servidor.
         await push(true);
         return;
       }
-      P.saveEvents(data, true);                 // silencioso: no dispara push
-      lastSyncedJSON = JSON.stringify(data);
+      if (cats) P.saveCats(cats, true);         // solo si el servidor ya tiene; si no, quedan los defaults locales
+      P.saveEvents(events, true);               // silencioso: no dispara push
+      lastSyncedJSON = snapshot();
       lastError = false;
       window.dispatchEvent(new CustomEvent('planner:remote-applied'));
       setStatus('ok');
@@ -103,7 +112,7 @@
 
   async function push(silentStatus) {
     if (!getKey()) { setStatus('nokey'); return; }
-    const json = JSON.stringify(P.getEvents());
+    const json = snapshot();
     if (json === lastSyncedJSON) { setStatus('ok'); return; }
     if (!silentStatus) setStatus('sync', 'Guardando…');
     try {
@@ -120,7 +129,7 @@
 
   // Reconciliar: si hay cambios locales sin subir, súbelos; si no, trae lo último.
   function reconcile() {
-    const local = JSON.stringify(P.getEvents());
+    const local = snapshot();
     if (lastSyncedJSON !== null && local !== lastSyncedJSON) return push();
     return pull();
   }
@@ -133,6 +142,7 @@
 
   /* ---------------- enganches ---------------- */
   window.addEventListener('planner:events-changed', schedulePush);
+  window.addEventListener('planner:cats-changed', schedulePush);
   window.addEventListener('online', reconcile);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) reconcile(); });
   // Intenta subir cambios pendientes si se cierra/oculta la pestaña.

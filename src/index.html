@@ -104,6 +104,27 @@
     </div>
   </div>
 
+  <!-- Categories modal -->
+  <div data-modal class="fixed inset-0 z-50 hidden items-center justify-center p-4" id="cats-modal">
+    <div class="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" data-cats-close></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[420px] overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="px-6 pt-5 pb-4 border-b border-line flex items-center justify-between">
+        <div>
+          <h3 class="font-serif text-[22px]">Categorías</h3>
+          <p class="text-[12px] text-gray2 mt-0.5">Renombra, cambia el color, añade o elimina.</p>
+        </div>
+        <button data-cats-close class="w-8 h-8 grid place-items-center rounded-lg text-gray2 hover:bg-mist2 text-[18px]">×</button>
+      </div>
+      <div class="px-6 py-4 overflow-y-auto" id="cats-list"></div>
+      <div class="px-6 pb-2">
+        <button id="cats-add" class="w-full h-10 rounded-lg border border-dashed border-line text-[14px] font-semibold text-slate hover:border-slate hover:bg-mist2/40 flex items-center justify-center gap-1.5"><span class="text-[17px] leading-none">+</span> Nueva categoría</button>
+      </div>
+      <div class="px-6 py-4 bg-mist2/50 border-t border-line flex items-center justify-end">
+        <button data-cats-close class="px-5 h-9 rounded-lg text-[14px] font-bold bg-ink text-white hover:bg-ink/90">Listo</button>
+      </div>
+    </div>
+  </div>
+
 <script src="vida-app.js"></script>
 <script src="sync.js"></script>
 </body>
