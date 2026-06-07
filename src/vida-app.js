@@ -14,7 +14,7 @@
   // eventos la referencian, así renombrar/recolorar no toca ningún evento.
   const FALLBACK_CAT = { name: 'Sin categoría', color: '#9AA6B1' };
   // Festivos nacionales de Colombia (capa de solo lectura, calculada en core.js).
-  const HOLIDAY_COLOR = '#C0524A';
+  const HOLIDAY_COLOR = '#C1121F';   // rojo sangre, vivo
   // Paleta curada (no picker nativo) para no romper la identidad visual.
   const PALETTE = [
     '#4E82A8', '#2E5E7E', '#5C8A8A', '#4F9E76', '#6FA84E', '#C39A52',
@@ -81,8 +81,13 @@
           const ev = covs[0], c = catColor(ev.cat);
           const lr = ds === ev.start || ci === 0, rr = ds === ev.end || ci === 6;
           cellStyle = `background:${c};border-radius:${lr ? 5 : 0}px ${rr ? 5 : 0}px ${rr ? 5 : 0}px ${lr ? 5 : 0}px`;
-          numCls = 'text-white font-semibold';
+          // Festivo con evento encima: el número va en rojo (no blanco) para conservar
+          // la señal de festivo; en negrita para resaltar sobre el color de la categoría.
+          if (hol) { numCls = 'font-bold'; numStyle = `color:${HOLIDAY_COLOR}`; }
+          else numCls = 'text-white font-semibold';
         } else if (hol) {
+          // Festivo sin evento: lavado rojo súper sutil en toda la celda + número rojo.
+          cellStyle = `background:${hexA(HOLIDAY_COLOR, 0.09)};border-radius:5px`;
           numCls = 'font-semibold'; numStyle = `color:${HOLIDAY_COLOR}`;
         }
         let numHtml;
@@ -177,6 +182,9 @@
           const lh = isStart ? `<span data-resize="l" class="absolute left-0 top-0 bottom-0 w-[8px] z-10"></span>` : '';
           const rh = isEnd ? `<span data-resize="r" class="absolute right-0 top-0 bottom-0 w-[8px] z-10"></span>` : '';
           content = `${title}${chips}${lh}${rh}`;
+        } else if (hol) {
+          // Festivo sin evento: lavado rojo súper sutil (el nombre ya va en rojo arriba).
+          cellStyle += `background:${hexA(HOLIDAY_COLOR, 0.05)};`;
         }
         const numCls = today ? 'bg-ink text-white w-6 h-6 inline-grid place-items-center rounded-full'
           : (inM ? (we ? 'text-slate' : 'text-ink') : 'text-gray2/40');

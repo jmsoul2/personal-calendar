@@ -129,10 +129,13 @@ por año) y `holidayName(ds)` → nombre o `null`. Reglas: 6 fijos + 7 de **Ley 
 (se trasladan al lunes siguiente, vía `toMonday()`) + 5 **móviles** según la Pascua
 (`easterSunday()` = Computus gregoriano; Jueves/Viernes Santo no se trasladan, los otros
 tres ya llevan el corrimiento a lunes en su offset: +43/+64/+71). Son los 18 festivos
-oficiales. En `vida-app.js` se pintan **sutiles** (constante `HOLIDAY_COLOR`):
-vista **Año** = número del día en rojo + `title` con el nombre; vista **Mes** = etiqueta
-roja con el nombre arriba-derecha de la celda (solo días del mes en curso). Siempre
-visibles (sin toggle). Entrada "Festivo" añadida a la leyenda. Para validar otro año:
+oficiales. En `vida-app.js` se pintan **sutiles** (constante `HOLIDAY_COLOR = '#C1121F'`,
+rojo sangre). **Festivo sin evento**: lavado rojo muy tenue en la celda (`hexA()`, alpha
+0.09 en Año / 0.05 en Mes) + número del día en rojo; en el Mes además la etiqueta con el
+nombre arriba-derecha (y `title` en Año). **Festivo con evento encima**: manda el color de
+la categoría (se ve el plan) y la señal de festivo queda solo en el **número en rojo+negrita**
+(Año) / nombre rojo arriba (Mes). Solo días del mes en curso. Siempre visibles (sin toggle).
+Entrada "Festivo" en la leyenda. Para validar otro año:
 comparar `colHolidays(y)` contra el calendario oficial (todos los de Emiliani deben caer lunes).
 
 ## Objetivos Actuales
