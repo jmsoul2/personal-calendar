@@ -33,7 +33,8 @@ La app es responsive y se puede instalar a pantalla completa en iPhone.
 - `src/` — Código de la app (esto es lo que Netlify publica, ver `netlify.toml`)
   - `index.html` — Punto de entrada (era "Calendario Vida.html"). Markup + modal + CSS responsive.
   - `core.js` — Capa de datos (`window.Planner`): localStorage, eventos, **categorías**,
-    utilidades de fecha. `saveEvents()` emite `planner:events-changed` y `saveCats()`
+    utilidades de fecha y **festivos colombianos** (`colHolidays(year)` / `holidayName(ds)`).
+    `saveEvents()` emite `planner:events-changed` y `saveCats()`
     emite `planner:cats-changed` (ambos los escucha `sync.js`).
   - `vida-app.js` — Toda la UI: render de Año/Mes, modal de evento, **modal de categorías**,
     drag & drop, eventos de click. Redibuja al recibir `planner:remote-applied`.
@@ -120,11 +121,26 @@ Botones ⤓/⤒ en el header (ambas vistas), en `vida-app.js` → `exportJSON()`
   **reemplaza** eventos (y categorías si el archivo las trae; aplica `cats` antes de validar las
   keys de los eventos). Luego sincroniza al servidor. El PC es la fuente principal.
 
+## Festivos colombianos (automáticos, solo lectura)
+Capa de solo lectura, **calculada en el cliente** — NO son eventos: no se guardan en
+localStorage, no se exportan/importan y no se sincronizan (cada dispositivo los calcula
+igual). En `core.js`: `colHolidays(year)` → mapa `{ 'YYYY-MM-DD': 'Nombre' }` (cacheado
+por año) y `holidayName(ds)` → nombre o `null`. Reglas: 6 fijos + 7 de **Ley Emiliani**
+(se trasladan al lunes siguiente, vía `toMonday()`) + 5 **móviles** según la Pascua
+(`easterSunday()` = Computus gregoriano; Jueves/Viernes Santo no se trasladan, los otros
+tres ya llevan el corrimiento a lunes en su offset: +43/+64/+71). Son los 18 festivos
+oficiales. En `vida-app.js` se pintan **sutiles** (constante `HOLIDAY_COLOR`):
+vista **Año** = número del día en rojo + `title` con el nombre; vista **Mes** = etiqueta
+roja con el nombre arriba-derecha de la celda (solo días del mes en curso). Siempre
+visibles (sin toggle). Entrada "Festivo" añadida a la leyenda. Para validar otro año:
+comparar `colHolidays(y)` contra el calendario oficial (todos los de Emiliani deben caer lunes).
+
 ## Objetivos Actuales
 - [x] Sincronización entre dispositivos (Netlify Functions + Blobs, clave compartida).
 - [x] Desplegar a Netlify (GitHub + auto-deploy) con `CAL_KEY`. Ver `DEPLOY.md`.
 - [x] Copia de seguridad local (export/import JSON).
 - [x] Categorías editables (renombrar, recolorar, añadir, quitar) sincronizadas.
-- [ ] Compartir el link + clave con Susana (Safari › Añadir a inicio).
+- [x] Compartir el link + clave con Susana (Safari › Añadir a inicio). ✅ ya lo usa.
+- [x] Festivos nacionales de Colombia (automáticos, marca sutil, ambas vistas).
 - [ ] (Opcional) Offline real con service worker — pospuesto a propósito.
 - [ ] (Opcional) Susana solo-lectura (clave aparte) si alguna vez se quiere separar roles.

@@ -13,6 +13,8 @@
   // mutan vía CAT_LIST + persistCats(), nunca a mano. La KEY es estable: los
   // eventos la referencian, así renombrar/recolorar no toca ningún evento.
   const FALLBACK_CAT = { name: 'Sin categoría', color: '#9AA6B1' };
+  // Festivos nacionales de Colombia (capa de solo lectura, calculada en core.js).
+  const HOLIDAY_COLOR = '#C0524A';
   // Paleta curada (no picker nativo) para no romper la identidad visual.
   const PALETTE = [
     '#4E82A8', '#2E5E7E', '#5C8A8A', '#4F9E76', '#6FA84E', '#C39A52',
@@ -58,7 +60,7 @@
 
   function legend() {
     return `<div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">${CAT_KEYS.map(k =>
-      `<span class="inline-flex items-center gap-1.5 text-[12px] text-gray2"><span class="w-2.5 h-2.5 rounded-full" style="background:${catColor(k)}"></span>${esc(CATS[k].name)}</span>`).join('')}<button data-cats-edit class="inline-flex items-center gap-1 text-[12px] font-semibold text-slate hover:text-ink"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editar</button></div>`;
+      `<span class="inline-flex items-center gap-1.5 text-[12px] text-gray2"><span class="w-2.5 h-2.5 rounded-full" style="background:${catColor(k)}"></span>${esc(CATS[k].name)}</span>`).join('')}<button data-cats-edit class="inline-flex items-center gap-1 text-[12px] font-semibold text-slate hover:text-ink"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editar</button><span class="inline-flex items-center gap-1.5 text-[12px] text-gray2" title="Festivos nacionales de Colombia (automáticos)"><span class="w-2.5 h-2.5 rounded-full" style="background:${HOLIDAY_COLOR}"></span>Festivo</span></div>`;
   }
 
   /* ---------------- YEAR: sidebar + mini-months (días rellenos) ---------------- */
@@ -73,18 +75,21 @@
         const inM = d.getMonth() === m, ds = P.fmt(d), today = P.isToday(d);
         if (!inM) { cells += `<div class="h-[22px]"></div>`; return; }
         const covs = P.eventsCovering(ds).sort((a, b) => P.spanDays(b) - P.spanDays(a));
+        const hol = P.holidayName(ds);
         let cellStyle = '', numCls = 'text-ink/75', numStyle = '';
         if (covs.length) {
           const ev = covs[0], c = catColor(ev.cat);
           const lr = ds === ev.start || ci === 0, rr = ds === ev.end || ci === 6;
           cellStyle = `background:${c};border-radius:${lr ? 5 : 0}px ${rr ? 5 : 0}px ${rr ? 5 : 0}px ${lr ? 5 : 0}px`;
           numCls = 'text-white font-semibold';
+        } else if (hol) {
+          numCls = 'font-semibold'; numStyle = `color:${HOLIDAY_COLOR}`;
         }
         let numHtml;
         if (today && covs.length) numHtml = `<span class="text-[10px] leading-none text-white font-bold w-[16px] h-[16px] grid place-items-center rounded-full" style="box-shadow:0 0 0 1.5px #fff inset">${d.getDate()}</span>`;
         else if (today) numHtml = `<span class="text-[10px] leading-none text-white font-bold w-[16px] h-[16px] grid place-items-center rounded-full" style="background:#0E2841">${d.getDate()}</span>`;
-        else numHtml = `<span class="text-[10px] leading-none ${numCls}">${d.getDate()}</span>`;
-        cells += `<button data-day="${ds}" class="h-[22px] grid place-items-center hover:ring-1 hover:ring-slate/50 transition" style="${cellStyle}">${numHtml}</button>`;
+        else numHtml = `<span class="text-[10px] leading-none ${numCls}" style="${numStyle}">${d.getDate()}</span>`;
+        cells += `<button data-day="${ds}"${hol ? ` title="${esc(hol)}"` : ''} class="h-[22px] grid place-items-center hover:ring-1 hover:ring-slate/50 transition" style="${cellStyle}">${numHtml}</button>`;
       }));
       return `
       <div class="rounded-xl p-3.5 border ${cur ? 'border-slate/40 bg-white shadow-sm' : 'border-transparent bg-white/50 hover:bg-white/80'} transition">
@@ -154,6 +159,7 @@
         const ds = P.fmt(d), inM = d.getMonth() === m, today = P.isToday(d), we = [0, 6].includes(d.getDay());
         const covs = P.eventsCovering(ds).sort((a, b) => P.spanDays(b) - P.spanDays(a));
         const primary = covs[0];
+        const hol = inM ? P.holidayName(ds) : null;
 
         let cellStyle = inM ? '' : 'background:#F8FAFB;';
         let attr = `data-add="${ds}"`, cur = 'cursor-pointer hover:bg-mist2/30', content = '';
@@ -174,8 +180,9 @@
         }
         const numCls = today ? 'bg-ink text-white w-6 h-6 inline-grid place-items-center rounded-full'
           : (inM ? (we ? 'text-slate' : 'text-ink') : 'text-gray2/40');
+        const holHtml = hol ? `<span class="ml-auto text-[9.5px] leading-tight font-semibold text-right truncate" style="color:${HOLIDAY_COLOR};max-width:72%" title="${esc(hol)}">${esc(hol)}</span>` : '';
         return `<div data-date="${ds}" ${attr} class="relative border-r border-b border-line ${cur} transition overflow-hidden select-none" style="${cellStyle}">
-          <div class="px-2 pt-1.5"><span class="text-[13px] font-semibold ${numCls}">${d.getDate()}</span></div>
+          <div class="px-2 pt-1.5 flex items-start gap-1"><span class="text-[13px] font-semibold ${numCls}">${d.getDate()}</span>${holHtml}</div>
           ${content}
         </div>`;
       }).join('');

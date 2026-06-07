@@ -93,6 +93,61 @@ window.Planner = (function () {
     return a + ' – ' + b;
   }
 
+  /* ---- festivos nacionales de Colombia (calculados, solo lectura) ----
+     Reglas: fijos + Ley Emiliani (se trasladan al lunes siguiente) + móviles
+     según la Pascua (Computus). Deterministas por año → se cachean. NO son
+     eventos: no se guardan, no se exportan y no se sincronizan. */
+  function easterSunday(year) {            // Computus gregoriano (algoritmo anónimo de Meeus)
+    const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+    const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const mp = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * mp + 114) / 31);    // 3 = marzo, 4 = abril
+    const day = ((h + l - 7 * mp + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+  }
+  // Ley Emiliani: si no cae en lunes, el descanso se traslada al lunes siguiente.
+  function toMonday(d) { const w = d.getDay(); return w === 1 ? d : addDays(d, (8 - w) % 7); }
+
+  const _holidayCache = {};
+  function colHolidays(year) {
+    if (_holidayCache[year]) return _holidayCache[year];
+    const out = {};
+    const set = (date, name) => { out[fmt(date)] = name; };
+    // Fijos (no se mueven)
+    set(new Date(year, 0, 1),   'Año Nuevo');
+    set(new Date(year, 4, 1),   'Día del Trabajo');
+    set(new Date(year, 6, 20),  'Día de la Independencia');
+    set(new Date(year, 7, 7),   'Batalla de Boyacá');
+    set(new Date(year, 11, 8),  'Inmaculada Concepción');
+    set(new Date(year, 11, 25), 'Navidad');
+    // Ley Emiliani (trasladados al lunes)
+    set(toMonday(new Date(year, 0, 6)),   'Reyes Magos');
+    set(toMonday(new Date(year, 2, 19)),  'Día de San José');
+    set(toMonday(new Date(year, 5, 29)),  'San Pedro y San Pablo');
+    set(toMonday(new Date(year, 7, 15)),  'Asunción de la Virgen');
+    set(toMonday(new Date(year, 9, 12)),  'Día de la Raza');
+    set(toMonday(new Date(year, 10, 1)),  'Todos los Santos');
+    set(toMonday(new Date(year, 10, 11)), 'Independencia de Cartagena');
+    // Móviles según la Pascua. Jueves/Viernes Santo NO se trasladan; los otros
+    // tres ya incluyen el corrimiento al lunes en su desplazamiento.
+    const e = easterSunday(year);
+    set(addDays(e, -3), 'Jueves Santo');
+    set(addDays(e, -2), 'Viernes Santo');
+    set(addDays(e, 43), 'Ascensión del Señor');
+    set(addDays(e, 64), 'Corpus Christi');
+    set(addDays(e, 71), 'Sagrado Corazón');
+    _holidayCache[year] = out;
+    return out;
+  }
+  // Nombre del festivo para 'YYYY-MM-DD', o null si ese día no es festivo.
+  function holidayName(dateStr) {
+    return colHolidays(+dateStr.slice(0, 4))[dateStr] || null;
+  }
+
   /* ---- multi-day events (Vida calendar) ---- */
   const KEY_EVENTS = 'planner:vida:events';   // [{id,title,start,end,cat,note}]
   function getEvents() { try { return JSON.parse(localStorage.getItem(KEY_EVENTS)) || []; } catch (e) { return []; } }
@@ -167,5 +222,6 @@ window.Planner = (function () {
     MONTHS, MONTHS_ABBR, DOW, DOW_ABBR, DOW_LETTER,
     fmt, parse, addDays, startOfDay, weekStart, weekDays, sameDay, today, isToday,
     monthMatrix, weekRangeLabel, uid,
+    colHolidays, holidayName,
   };
 })();
